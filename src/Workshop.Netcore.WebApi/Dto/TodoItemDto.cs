@@ -1,9 +1,8 @@
-﻿namespace Workshop.Netcore.WebApi.Models;
+﻿namespace Workshop.Netcore.WebApi.Dto;
 
-public class TodoItem
+public class TodoItemDto
 {
     public long Id { get; set; }
     public string? Name { get; set; }
     public bool IsComplete { get; set; }
-    public WebApiUser Owner { get; set; }
 }

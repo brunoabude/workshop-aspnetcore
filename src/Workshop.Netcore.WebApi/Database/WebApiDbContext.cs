@@ -11,4 +11,11 @@ public class WebApiDbContext : IdentityDbContext<WebApiUser>
     }
 
     public DbSet<TodoItem> TodoItems { get; set; } = null!;
+
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        base.OnModelCreating(builder);
+
+        builder.Entity<TodoItem>().HasOne(e => e.Owner);
+    }
 }
