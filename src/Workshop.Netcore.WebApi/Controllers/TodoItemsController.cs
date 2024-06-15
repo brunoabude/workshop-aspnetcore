@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using ClosedXML.Excel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -46,7 +47,7 @@ namespace Workshop.Netcore.WebApi.Controllers
 
         // GET: api/TodoItems
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<TodoItemDto>>> GetTodoItems()
+        public async Task<ActionResult<IEnumerable<TodoItemDto>>> GetTodoItems([FromQuery] string format = "JSON")
         {
             var user = await GetCurrentUser();
 
@@ -54,7 +55,42 @@ namespace Workshop.Netcore.WebApi.Controllers
                 .Where(t => t.Owner.Id == user.Id)
                 .ToListAsync();
 
-            return todoItems.Select(ToDto).ToList();
+            if ("JSON".Equals(format?.Trim()?.ToUpperInvariant()))
+            {
+                return todoItems.Select(ToDto).ToList();
+            } else if ("XLSX".Equals(format?.Trim()?.ToUpperInvariant()))
+            {
+                var stream = new MemoryStream();
+                var workBook = new XLWorkbook();
+                var workSheet = workBook.Worksheets.Add("Meus todo's");
+                var currentRow = 1;
+
+                workSheet.Cell(currentRow, 1).SetValue("Id").Style.Font.Bold = true;
+                workSheet.Cell(currentRow, 2).SetValue("Nome").Style.Font.Bold = true;
+                workSheet.Cell(currentRow, 3).SetValue("Estado").Style.Font.Bold = true;
+                
+                currentRow++;
+
+                foreach(var item in todoItems)
+                {
+                    workSheet.Cell(currentRow, 1).SetValue(item.Id);
+                    workSheet.Cell(currentRow, 2).SetValue(item.Name ?? "");
+                    workSheet.Cell(currentRow, 3).SetValue(item.IsComplete ? "Completado" : "Pendente");
+
+                    currentRow++;
+                }
+                
+                workSheet.Column(1).AdjustToContents();
+                workSheet.Column(2).AdjustToContents();
+                workSheet.Column(3).AdjustToContents();
+
+                workBook.SaveAs(stream);
+                stream.Seek(0, SeekOrigin.Begin);                
+                return File(stream, "application/ms-excel", $"{Guid.NewGuid():N}.xlsx");
+            } else
+            {
+                return BadRequest();
+            }
         }
 
         // GET: api/TodoItems/5
@@ -147,6 +183,38 @@ namespace Workshop.Netcore.WebApi.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+
+        // POST: api/TodoItems/import
+        // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
+        [HttpPost("import")]
+        public async Task<ActionResult<IEnumerable<TodoItemDto>>> ImportTodoItemsFromExcel(IFormFile file)
+        {
+            var userId = User.Claims.First(t => t.Type == ClaimTypes.NameIdentifier);
+            var user = await _userManager.FindByIdAsync(userId.Value);
+
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream);
+            stream.Seek(0, SeekOrigin.Begin);
+
+            var workBook = new XLWorkbook(stream);
+            var workSheet = workBook.Worksheets.First();
+
+            var todoItems = workSheet.RowsUsed().Select(row => new TodoItem {
+                Name = row.Cell(1).Value.ToString(),
+                IsComplete = bool.Parse(row.Cell(2).Value.ToString()),
+                Owner = user!
+            });
+
+            foreach(var todoItem in todoItems)
+            {
+                _context.TodoItems.Add(todoItem);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetTodoItem), new { id = todoItems.Select(t => t.Id) }, todoItems.Select(ToDto));
         }
 
         private bool TodoItemExists(long id)
