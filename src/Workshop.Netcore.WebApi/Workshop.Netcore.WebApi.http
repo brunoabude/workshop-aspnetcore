@@ -1,0 +1,6 @@
+@Workshop.Netcore.WebApi_HostAddress = http://localhost:5086
+
+GET {{Workshop.Netcore.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
