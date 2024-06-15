@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Workshop.Netcore.WebApi.Database;
 using Microsoft.Extensions.Configuration;
+using Workshop.Netcore.WebApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,9 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<WebApiDbContext>(opt => 
     opt.UseSqlite(builder.Configuration.GetConnectionString("WebApiLocalDatabase")));
 
+builder.Services.AddIdentityApiEndpoints<WebApiUser>()
+.AddEntityFrameworkStores<WebApiDbContext>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -25,8 +29,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
+app.UseAuthentication();
 app.UseAuthorization();
+app.MapGroup("auth").MapIdentityApi<WebApiUser>();
 
 app.MapControllers();
-
 app.Run();
