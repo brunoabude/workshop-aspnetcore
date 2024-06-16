@@ -1,9 +1,3 @@
-# Capítulo 6 - Docker
-Vamos criar uma imagem com nossa aplicação
-
-O primeiro passo é criar um arquivo `Dockerfile` na pasta `src`
-
-```Dockerfile
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build-env
 RUN apt update
 RUN apt install sqlite3 -y
@@ -26,18 +20,3 @@ WORKDIR /WebApi
 COPY --from=build-env /src/out .
 COPY --from=build-env /src/app-prod.db app.db
 ENTRYPOINT ["dotnet", "Workshop.Netcore.WebApi.dll"]
-```
-
-O DockerFile cria um novo banco sqlite do 0 e aplica todas as migrações.
-
-Depois é so buildar e executar o container:
-
-```console
-src$ docker build -t workshopaspnetmvc:latest .
-src$ docker run -p 8080:8080 workshopaspnetmvc:latest
-```
-
----
-Referências:
-
-1. [Containerize an app with Docker tutorial - .NET | Microsoft Learn](https://learn.microsoft.com/en-us/dotnet/core/docker/build-container?tabs=linux&pivots=dotnet-8-0)
