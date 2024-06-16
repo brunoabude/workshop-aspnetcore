@@ -1,114 +1,16 @@
-# Capítulo 5 - Exportar para e importar de planilhas Excel
-Neste capítulo iremos estender a funcionalidade da rota de listagem para
-retornar também os *todos* no formato de planilha Excel. Posteriormente iremos
-estender a rota de criação de *todos* para receber um arquivo de planilha
-com uma lista de *todos*.
+# Workshop AspNetCore
 
-## 1. Instalação do ClosedXml
-O [`ClosedXML`](https://github.com/ClosedXML/ClosedXML) é uma biblioteca que
-fornece uma Interface mais intuitiva para a biblioteca
-[`Open-XML-SDK`](https://github.com/dotnet/Open-XML-SDK) e permite a 
-manipulação de arquivos de planilhas **Excel 2007+ (.xlsx, .xlsm)**.
-Para planilhas simples, o `ClosedXML` é recomendado. Porém, para planilhas
-mais complexas (que precisam de gráficos, por exemplo) a lib `Open-XML-SDK` é mais completa
-e mais indicada, apesar de sua API mais verbosa e complexa.
+- [Capítulo 0 - Instalação do .net sdk e setup do VSCode](https://github.com/brunoabude/workshop-aspnetcore/tree/capitulo-00)
 
-Para nosso exemplo iremos utilizar o `ClosedXML`. 
-O nuget pode ser instalado através do comando:
+- [Capítulo 1 - Criação da Solution e do Projeto WebApi ](https://github.com/brunoabude/workshop-aspnetcore/tree/capitulo-01)
 
-```
-src/Workshop.Netcore.WebApi$ dotnet add package ClosedXML
-```
+- [Capítulo 2 - Controller com CRUD de itens todo e migrações do  ](https://github.com/brunoabude/workshop-aspnetcore/tree/capitulo-02)
 
-## 2. Rota de Listagem
-Iremos adicionar um novo parâmetro de query chamado `format` que deve indica
-o formato de retorno desejado. Para o formato `XLSX` iremos criar uma planilha
-em memória incluir os itens *todo* do usuário logado.
+- [Capítulo 3 - Autenticação e Autorização utilizando Identity ](https://github.com/brunoabude/workshop-aspnetcore/tree/capitulo-03)
 
-```c#
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<TodoItemDto>>> GetTodoItems([FromQuery] string format = "JSON")
-    {
-        var user = await GetCurrentUser();
+- [Capítulo 4 - Segregação dos itens de todo por usuário ](https://github.com/brunoabude/workshop-aspnetcore/tree/capitulo-04)
 
-        var todoItems = await _context.TodoItems
-            .Where(t => t.Owner.Id == user.Id)
-            .ToListAsync();
+- [Capítulo 5 - Rotas de importar e exportar excel ](https://github.com/brunoabude/workshop-aspnetcore/tree/capitulo-05)
 
-        if ("JSON".Equals(format?.Trim()?.ToUpperInvariant()))
-        {
-            return todoItems.Select(ToDto).ToList();
-        } else if ("XLSX".Equals(format?.Trim()?.ToUpperInvariant()))
-        {
-            var stream = new MemoryStream();
-            var workBook = new XLWorkbook();
-            var workSheet = workBook.Worksheets.Add("Meus todo's");
-            var currentRow = 1;
+- [Capítulo 6 - Dockerfile  ](https://github.com/brunoabude/workshop-aspnetcore/tree/capitulo-06)
 
-            workSheet.Cell(currentRow, 1).SetValue("Id").Style.Font.Bold = true;
-            workSheet.Cell(currentRow, 2).SetValue("Nome").Style.Font.Bold = true;
-            workSheet.Cell(currentRow, 3).SetValue("Estado").Style.Font.Bold = true;
-            
-            currentRow++;
-
-            foreach(var item in todoItems)
-            {
-                workSheet.Cell(currentRow, 1).SetValue(item.Id);
-                workSheet.Cell(currentRow, 2).SetValue(item.Name ?? "");
-                workSheet.Cell(currentRow, 3).SetValue(item.IsComplete ? "Completado" : "Pendente");
-
-                currentRow++;
-            }
-            
-            workSheet.Column(1).AdjustToContents();
-            workSheet.Column(2).AdjustToContents();
-            workSheet.Column(3).AdjustToContents();
-
-            workBook.SaveAs(stream);
-            stream.Seek(0, SeekOrigin.Begin);                
-            return File(stream, "application/ms-excel", $"{Guid.NewGuid():N}.xlsx");
-        } else
-        {
-            return BadRequest();
-        }
-    }
-```
-
-## 3 - Importar uma lista de *todos* da planilha Excel
-O *ClosedXML* também pode ser usado para ler um arquivo xlsx. Vamos criar uma nova
-rota `POST api/TodoItems/import` que recebe um arquivo binário. Utilizaremos o
-*ClosedXML* para ler o conteúdo do arquivo e extrair os *todos* daplanilha.
-
-A estrutura esperada da planilha é de duas colunas: a primeira contendo o nome do *todo*
- e a segunda contendo a string `true` ou `false`.
-
-```c#
-    [HttpPost("import")]
-    public async Task<ActionResult<IEnumerable<TodoItemDto>>> ImportTodoItemsFromExcel(IFormFile file)
-    {
-        var userId = User.Claims.First(t => t.Type == ClaimTypes.NameIdentifier);
-        var user = await _userManager.FindByIdAsync(userId.Value);
-
-        using var stream = new MemoryStream();
-        await file.CopyToAsync(stream);
-        stream.Seek(0, SeekOrigin.Begin);
-
-        var workBook = new XLWorkbook(stream);
-        var workSheet = workBook.Worksheets.First();
-
-        var todoItems = workSheet.RowsUsed().Select(row => new TodoItem {
-            Name = row.Cell(1).Value.ToString(),
-            IsComplete = bool.Parse(row.Cell(2).Value.ToString()),
-            Owner = user!
-        });
-
-        foreach(var todoItem in todoItems)
-        {
-            _context.TodoItems.Add(todoItem);
-        }
-
-        await _context.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetTodoItem), new { id = todoItems.Select(t => t.Id) }, todoItems.Select(ToDto));
-    }
-```
